@@ -1,0 +1,84 @@
+DofusAuto — version 0.8.1 (Phases 1 à 6 : combats en boucle)
+===========================================================
+
+LANCER
+  Double-clique sur DofusAuto.exe. Rien d'autre à installer.
+  (Windows peut afficher « Windows a protégé votre ordinateur » :
+   clique sur « Informations complémentaires » puis « Exécuter quand même ».)
+
+AVANT DE TESTER
+  - Lance BlueStacks avec Dofus Touch, sur une carte où un monstre est visible.
+  - Laisse la fenêtre BlueStacks entièrement visible : ne la recouvre pas
+    (y compris avec la fenêtre DofusAuto) et ne la réduis pas.
+  - Ne change plus la taille de la fenêtre BlueStacks une fois les images prises.
+
+COMMENT TESTER (dans cet ordre)
+  Pendant les tests et les enregistrements, la fenêtre DofusAuto se réduit
+  toute seule pour laisser le jeu visible, puis revient avec le résultat.
+  1. « Enregistrer une capture » : sauvegarde ce que voit le programme dans le
+     dossier « captures ». La taille de l'image est indiquée dans le journal.
+  2. « Tester : monstres (sans clic) » : cherche les monstres sans cliquer,
+     et affiche un cadre vert autour de la cible choisie.
+     « Tester : boutons du jeu » : indique si le programme voit le bouton Prêt
+     (placement), le bouton Fin du tour vert (c'est ton tour) et l'icône de sort.
+     À essayer pendant un combat, à différents moments.
+     « Tester : placement (sans clic) » : pendant le placement, montre les cases
+     rouges (à toi) et bleues (monstres) et entoure en vert la case choisie.
+     « Tester : combat (sans clic) » : pendant ton tour, indique où sont les
+     adversaires, ton personnage, et lesquels sont à portée. Sélectionne d'abord
+     le sort Coagulation à la main pour que la portée (violet) soit affichée.
+  3. « Enregistrer une séquence » : prend une capture par seconde pendant 40 s
+     (dossier « captures ») et crée une planche-contact « planche.jpg ».
+     Sert à analyser ce qui se passe à l'écran (début de combat, etc.).
+  4. « Démarrer » : cherche en boucle et clique sur la meilleure cible, puis
+     attend le bouton « Prêt » (phase 2), se place sur la case choisie selon la
+     règle du menu (plus proche / plus éloignée / ne pas bouger) et clique sur
+     « Prêt » (phase 3). Ensuite il joue les tours (phases 4-5) : il attend que le
+     bouton « Fin du tour » soit vert, lance Coagulation sur l'adversaire à portée
+     le plus proche (2 fois par tour, réglable avec « Lancers »), confirme avec la
+     coche ✓, puis clique sur « Fin du tour ». S'il n'y a personne à portée, il
+     passe son tour. Il s'arrête si aucun tour ne se présente pendant 2 minutes
+     (combat fini).
+     Phase 6 : quand la fenêtre « Résultat du combat » apparaît, le programme la ferme
+     (croix en haut à droite), attend le retour à la carte et reprend la recherche d'un
+     monstre : les combats s'enchaînent jusqu'à ce que tu appuies sur F12.
+     (Décoche « Phase 6 : enchaîner les combats » pour t'arrêter après un seul combat.)
+     Si aucun combat ne démarre en 20 s, il reprend la recherche.
+     (Décoche « Phase 3 » pour t'arrêter au placement, « Phase 2 » pour la version 0.2.)
+     ARRÊT : touche F12 (fonctionne même si une autre fenêtre est active)
+     ou bouton « Arrêter ».
+
+RÉGLAGES
+  - Seuil de confiance (en bas de la fenêtre) : plus il est haut, plus le
+    programme est strict. Commence à 0.80. Si rien n'est détecté alors qu'un
+    monstre est visible, baisse un peu ; s'il clique à côté, monte-le.
+  - Clics : 2 = double clic (par défaut), 1 = simple clic.
+  - Pause entre deux lancers d'un même tour : 500 ms (réglage
+    « pause_between_casts_ms » dans config.json, en millisecondes).
+  - Déplacement : si aucun monstre n'est à portée, le personnage se rapproche du
+    monstre le plus proche (3 cases maximum, double clic sur la case), puis finit
+    son tour. Réglages « move_when_out_of_range » (true/false) et
+    « max_move_cells » dans config.json.
+    « Tester : combat (sans clic) » montre la case visée (croix violette) quand
+    personne n'est à portée.
+  - Autres réglages : fichier config.json (à ouvrir avec le Bloc-notes).
+
+AJOUTER UN MONSTRE
+  Dans le dossier assets\monsters : un sous-dossier par monstre, un PNG par
+  orientation. Clique sur « Recharger les images » ensuite.
+  Pour une détection fiable, rogne au plus près du monstre, ou envoie-moi
+  la capture complète et je prépare l'image avec son masque.
+
+EN CAS DE PROBLÈME
+  Envoie-moi : le texte du journal (zone en bas de la fenêtre), les images du
+  dossier « logs » (diag_….png) et les images du dossier « captures ».
+
+MODE D'AFFICHAGE
+  Le programme fonctionne avec le « mode créature » (petits pions en combat)
+  comme avec l'affichage normal. Garde toujours le même réglage.
+
+LIMITES CONNUES DE CETTE VERSION
+  - Le clic utilise la vraie souris : ne la touche pas pendant que le
+    programme tourne.
+  - Si une fenêtre inattendue apparaît (montée de niveau, message…), le programme ne la connaît pas.
+  - Le placement suppose BlueStacks à la même taille que les captures de référence.

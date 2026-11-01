@@ -1,0 +1,7 @@
+{
+  "window_title_contains": "BlueStacks",
+  "threshold": 0.8,
+  "scan_interval_ms": 500,
+  "cooldown_after_click_s": 4.0,
+  "save_diagnostics": true
+}
