@@ -253,7 +253,68 @@ def play_turn(ctx: Context, should_stop) -> int:
             scene, (ox, oy) = ctx.capture.grab()
         if not done:
             break
+    if (cfg.second_spell and casts >= cfg.casts_per_turn and not should_stop()
+            and not _find(ctx, ctx.capture.grab()[0], "resultat_titre")):
+        if cfg.pause_between_casts_ms > 0:
+            ctx.log(f"Pause de {cfg.pause_between_casts_ms} ms avant le Pied du Sacrieur.")
+            time.sleep(cfg.pause_between_casts_ms / 1000)
+        if cast_second_spell(ctx):
+            casts += 1
     return casts
+
+
+# --- 2e sort : Pied du Sacrieur (3 PA, au contact) ------------------------------------------------
+SECOND_SPELL = "pied_du_sacrieur"       # nom de l'image dans assets/ui
+SECOND_SPELL_LABEL = "Pied du Sacrieur"
+SMALL_RANGE_PIXELS = 800                # portée de 4 cases seulement : peu de violet à l'écran
+
+
+def cast_second_spell(ctx: Context) -> bool:
+    """Sélectionne le Pied du Sacrieur, le lance sur l'adversaire à portée le plus proche et confirme."""
+    cfg = ctx.config
+    scene, (ox, oy) = ctx.capture.grab()
+    icon = _find(ctx, scene, SECOND_SPELL)
+    if not icon:
+        ctx.log(f"⚠ Icône du {SECOND_SPELL_LABEL} introuvable ({SECOND_SPELL}.png dans assets/ui).")
+        return False
+    inp.click(ox + icon.center[0], oy + icon.center[1])
+    selected = False
+    t0 = time.time()
+    while time.time() - t0 < 1.8:
+        time.sleep(0.3)
+        if range_visible(ctx.capture.grab()[0], SMALL_RANGE_PIXELS):
+            selected = True
+            break
+    if not selected:
+        ctx.log(f"Le {SECOND_SPELL_LABEL} ne s'affiche pas (plus assez de PA ?).")
+        return False
+    scene, (ox, oy) = ctx.capture.grab()
+    enemies, me = find_enemies(scene), find_me(scene, ctx.me_hint)
+    mask = range_mask(scene)
+    origin = me.center if me else (ctx.me_hint or (enemies[0].center if enemies else None))
+    in_range = [f for f in (sort_by_distance(enemies, origin) if origin else enemies)
+                if range_fraction(mask, f.center) >= cfg.range_min_fraction]
+    ctx.log(f"{SECOND_SPELL_LABEL} : {len(enemies)} adversaire(s), {len(in_range)} à portée.")
+    if not in_range:
+        ctx.log(f"Personne au contact : pas de {SECOND_SPELL_LABEL}.")
+        icon2 = _find(ctx, scene, SECOND_SPELL)        # on désélectionne le sort avant de finir le tour
+        if icon2:
+            inp.click(ox + icon2.center[0], oy + icon2.center[1])
+        return False
+    for target in in_range[:3]:
+        _diag(ctx, scene, enemies, me, target, label="pied")
+        inp.click(ox + target.cx, oy + target.cy - 4)
+        ok, origin2 = _wait_confirm(ctx)
+        if ok:
+            inp.click(origin2[0] + ok.center[0], origin2[1] + ok.center[1])
+            ctx.log(f"✔ {SECOND_SPELL_LABEL} lancé en {target.center}.")
+            time.sleep(1.5)
+            return True
+        ctx.log("Pas de confirmation sur cette cible.")
+        scene, (ox, oy) = ctx.capture.grab()
+        if not range_visible(scene, SMALL_RANGE_PIXELS):
+            break
+    return False
 
 
 def end_turn(ctx: Context) -> bool:
@@ -308,7 +369,7 @@ def test_combat(ctx: Context) -> np.ndarray:
     if me:
         ctx.me_hint = me.center
     mask = range_mask(scene)
-    visible = range_visible(scene)
+    visible = range_visible(scene, SMALL_RANGE_PIXELS)
     ctx.log(f"Mon personnage : {me.center if me else 'introuvable'} · {len(enemies)} adversaire(s) · "
             f"portée du sort {'affichée' if visible else 'non affichée (sélectionne d’abord le sort)'}")
     origin = me.center if me else None

@@ -6,8 +6,9 @@ from datetime import datetime
 import numpy as np
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel,
-                               QMainWindow, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGridLayout,
+                               QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPlainTextEdit, QPushButton,
+                               QSizePolicy, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 from core import input as inp
 from core.capture import WindowCapture
@@ -23,7 +24,7 @@ from phases.p3_placement import RULES, test_placement
 from phases.p4_tour import test_combat
 from phases.runner import run_phases
 
-VERSION = "0.8.2"
+VERSION = "0.8.4"
 
 # Modes pendant lesquels DofusAuto se réduit pour ne pas cacher le jeu, puis revient.
 HIDE_MODES = {"test", "testui", "testplace", "testcombat", "snapshot", "sequence"}
@@ -75,8 +76,8 @@ class Worker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"DofusAuto {VERSION} — Phases 1 à 6 : combats en boucle")
-        self.resize(1000, 700)
+        self.setWindowTitle(f"DofusAuto {VERSION} : combats en boucle")
+        self.resize(1000, 780)
         self.cfg = load_config(config_path())
         self.ctx = Context(self.cfg, WindowCapture(self.cfg.window_title_contains))
         self.worker: Worker | None = None
@@ -84,87 +85,138 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
+        root.setSpacing(8)
 
+        # --- En haut : monstres chargés --------------------------------
         self.info = QLabel()
+        self.info.setWordWrap(True)
         root.addWidget(self.info)
 
+        # --- Aperçu ----------------------------------------------------
         self.preview = QLabel("L'aperçu de ce que le programme voit apparaîtra ici.")
         self.preview.setAlignment(Qt.AlignCenter)
-        self.preview.setMinimumSize(640, 340)
+        self.preview.setMinimumSize(640, 300)
         self.preview.setStyleSheet("background:#222;color:#aaa;")
         root.addWidget(self.preview, 1)
 
-        row = QHBoxLayout()
-        self.btn_start = QPushButton("▶ Démarrer")
-        self.btn_stop = QPushButton("■ Arrêter (F12)")
-        self.btn_test = QPushButton("Tester : monstres (sans clic)")
-        self.btn_testui = QPushButton("Tester : boutons du jeu")
-        self.btn_testplace = QPushButton("Tester : placement (sans clic)")
-        self.btn_testcombat = QPushButton("Tester : combat (sans clic)")
-        self.btn_snap = QPushButton("Enregistrer une capture")
-        self.btn_seq = QPushButton("Enregistrer une séquence")
-        for b in (self.btn_start, self.btn_stop, self.btn_test, self.btn_testui, self.btn_testplace,
-                  self.btn_testcombat, self.btn_snap, self.btn_seq):
-            row.addWidget(b)
-        root.addLayout(row)
+        # --- Onglets ---------------------------------------------------
+        tabs = QTabWidget()
+        tabs.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        root.addWidget(tabs)
 
-        row2 = QHBoxLayout()
-        row2.addWidget(QLabel("Seuil de confiance :"))
-        self.spin = QDoubleSpinBox()
-        self.spin.setRange(0.50, 0.99)
-        self.spin.setSingleStep(0.01)
-        self.spin.setDecimals(2)
-        self.spin.setValue(self.cfg.threshold)
-        self.spin.valueChanged.connect(self._threshold_changed)
-        row2.addWidget(self.spin)
-        row2.addWidget(QLabel("Clics :"))
-        self.clicks = QSpinBox()
-        self.clicks.setRange(1, 3)
-        self.clicks.setValue(self.cfg.click_count)
-        self.clicks.valueChanged.connect(lambda v: setattr(self.cfg, "click_count", int(v)))
-        row2.addWidget(self.clicks)
+        # Onglet « Combat »
+        tab_combat = QWidget()
+        lay = QHBoxLayout(tab_combat)
+        col = QVBoxLayout()
+        self.btn_start = QPushButton("▶  Démarrer")
+        self.btn_stop = QPushButton("■  Arrêter (F12)")
+        for b in (self.btn_start, self.btn_stop):
+            b.setMinimumSize(170, 42)
+            f = b.font()
+            f.setPointSize(f.pointSize() + 2)
+            f.setBold(True)
+            b.setFont(f)
+            col.addWidget(b)
+        col.addStretch(1)
+        lay.addLayout(col)
+
+        steps = QGroupBox("Étapes du combat")
+        grid = QGridLayout(steps)
         self.chk_combat = QCheckBox("Phase 2 : attendre le combat")
         self.chk_combat.setChecked(self.cfg.detect_combat)
         self.chk_combat.toggled.connect(lambda v: setattr(self.cfg, "detect_combat", bool(v)))
-        row2.addWidget(self.chk_combat)
+        grid.addWidget(self.chk_combat, 0, 0)
         self.chk_place = QCheckBox("Phase 3 : placement")
         self.chk_place.setChecked(self.cfg.do_placement)
         self.chk_place.toggled.connect(lambda v: setattr(self.cfg, "do_placement", bool(v)))
-        row2.addWidget(self.chk_place)
+        grid.addWidget(self.chk_place, 1, 0)
         self.rule = QComboBox()
         for key, label in RULES.items():
             self.rule.addItem(label, key)
         idx = self.rule.findData(self.cfg.placement_rule)
         self.rule.setCurrentIndex(idx if idx >= 0 else 0)
         self.rule.currentIndexChanged.connect(lambda _: setattr(self.cfg, "placement_rule", self.rule.currentData()))
-        row2.addWidget(self.rule)
+        grid.addWidget(self.rule, 1, 1)
         self.chk_turns = QCheckBox("Phases 4-5 : jouer les tours")
         self.chk_turns.setChecked(self.cfg.do_turns)
         self.chk_turns.toggled.connect(lambda v: setattr(self.cfg, "do_turns", bool(v)))
-        row2.addWidget(self.chk_turns)
-        row2.addWidget(QLabel("Lancers :"))
+        grid.addWidget(self.chk_turns, 2, 0)
+        casts_row = QHBoxLayout()
+        casts_row.addWidget(QLabel("Lancers par tour :"))
         self.casts = QSpinBox()
         self.casts.setRange(1, 3)
         self.casts.setValue(self.cfg.casts_per_turn)
         self.casts.valueChanged.connect(lambda v: setattr(self.cfg, "casts_per_turn", int(v)))
-        row2.addWidget(self.casts)
+        casts_row.addWidget(self.casts)
+        casts_row.addStretch(1)
+        grid.addLayout(casts_row, 2, 1)
         self.chk_loop = QCheckBox("Phase 6 : enchaîner les combats")
         self.chk_loop.setChecked(self.cfg.loop_combats)
         self.chk_loop.toggled.connect(lambda v: setattr(self.cfg, "loop_combats", bool(v)))
-        row2.addWidget(self.chk_loop)
-        row2.addStretch(1)
+        grid.addWidget(self.chk_loop, 3, 0)
+        grid.setColumnStretch(2, 1)
+        lay.addWidget(steps, 1)
+        tabs.addTab(tab_combat, "Combat")
+
+        # Onglet « Tests »
+        tab_tests = QWidget()
+        lay = QHBoxLayout(tab_tests)
+        box = QGroupBox("Tester sans cliquer (DofusAuto se réduit pendant le test)")
+        grid = QGridLayout(box)
+        self.btn_test = QPushButton("Monstres")
+        self.btn_testui = QPushButton("Boutons du jeu")
+        self.btn_testplace = QPushButton("Placement")
+        self.btn_testcombat = QPushButton("Combat")
+        for i, b in enumerate((self.btn_test, self.btn_testui, self.btn_testplace, self.btn_testcombat)):
+            b.setMinimumHeight(32)
+            grid.addWidget(b, i // 2, i % 2)
+        lay.addWidget(box, 2)
+        box = QGroupBox("Enregistrer ce que voit le programme")
+        v = QVBoxLayout(box)
+        self.btn_snap = QPushButton("Une capture")
+        self.btn_seq = QPushButton("Une séquence (1 image par seconde)")
+        for b in (self.btn_snap, self.btn_seq):
+            b.setMinimumHeight(32)
+            v.addWidget(b)
+        lay.addWidget(box, 1)
+        tabs.addTab(tab_tests, "Tests")
+
+        # Onglet « Réglages »
+        tab_set = QWidget()
+        lay = QHBoxLayout(tab_set)
+        box = QGroupBox("Détection et clics")
+        form = QFormLayout(box)
+        self.spin = QDoubleSpinBox()
+        self.spin.setRange(0.50, 0.99)
+        self.spin.setSingleStep(0.01)
+        self.spin.setDecimals(2)
+        self.spin.setValue(self.cfg.threshold)
+        self.spin.valueChanged.connect(self._threshold_changed)
+        form.addRow("Seuil de confiance :", self.spin)
+        self.clicks = QSpinBox()
+        self.clicks.setRange(1, 3)
+        self.clicks.setValue(self.cfg.click_count)
+        self.clicks.valueChanged.connect(lambda v: setattr(self.cfg, "click_count", int(v)))
+        form.addRow("Clics sur le monstre :", self.clicks)
+        lay.addWidget(box, 1)
+        box = QGroupBox("Images et dossiers")
+        grid = QGridLayout(box)
         self.btn_reload = QPushButton("Recharger les images")
         self.btn_imgs = QPushButton("Dossier des images")
         self.btn_logs = QPushButton("Dossier des journaux")
         self.btn_caps = QPushButton("Dossier des captures")
-        for b in (self.btn_reload, self.btn_imgs, self.btn_logs, self.btn_caps):
-            row2.addWidget(b)
-        root.addLayout(row2)
+        for i, b in enumerate((self.btn_reload, self.btn_imgs, self.btn_logs, self.btn_caps)):
+            b.setMinimumHeight(30)
+            grid.addWidget(b, i // 2, i % 2)
+        lay.addWidget(box, 1)
+        tabs.addTab(tab_set, "Réglages")
 
+        # --- Journal ---------------------------------------------------
+        root.addWidget(QLabel("Journal :"))
         self.logbox = QPlainTextEdit()
         self.logbox.setReadOnly(True)
         self.logbox.setMaximumBlockCount(500)
-        self.logbox.setMaximumHeight(160)
+        self.logbox.setMaximumHeight(150)
         root.addWidget(self.logbox)
 
         self.btn_start.clicked.connect(lambda: self._launch("loop"))
@@ -183,7 +235,7 @@ class MainWindow(QMainWindow):
         self._reload_templates()
         self._set_running(False)
         QTimer.singleShot(0, lambda: self.log("Prêt. Place BlueStacks bien visible (sans le recouvrir), "
-                                              "puis clique sur « Tester la détection »."))
+                                              "puis utilise l'onglet « Tests » ou « Démarrer »."))
 
     # --- utilitaires -------------------------------------------------
     def log(self, msg: str):
@@ -205,7 +257,7 @@ class MainWindow(QMainWindow):
             monsters.setdefault(t.monster, 0)
             monsters[t.monster] += 1
         txt = ", ".join(f"{m} ({n} variante{'s' if n > 1 else ''})" for m, n in monsters.items())
-        self.info.setText(f"Monstres chargés : {txt or 'aucun — ajoute des images dans le dossier des images'}")
+        self.info.setText(f"Monstres chargés : {txt or 'aucun : ajoute des images dans le dossier des images'}")
         self.log(f"{len(self.ctx.templates)} image(s) de monstre et "
                  f"{len(self.ctx.ui_templates)} image(s) de bouton chargée(s).")
 

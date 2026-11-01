@@ -88,6 +88,8 @@ def test_ui(ctx: Context) -> np.ndarray:
             ("OUI" if r.turn_active else "non" + (" (bouton visible mais grisé)" if "fin_du_tour" in f else "")))
     ctx.log("Icône de sort (combat en cours) : " +
             (f"visible (score {f['sort_attaque'].score:.2f})" if "sort_attaque" in f else "non visible"))
+    ctx.log("Icône du Pied du Sacrieur : " +
+            (f"visible (score {f['pied_du_sacrieur'].score:.2f})" if "pied_du_sacrieur" in f else "non visible"))
     ctx.log("Fenêtre « Résultat du combat » (fin de combat) : " +
             (f"visible, bouton de fermeture " + ("trouvé" if "fermer_resultat" in f else "INTROUVABLE")
              if "resultat_titre" in f else "non visible"))

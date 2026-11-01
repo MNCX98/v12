@@ -1,4 +1,4 @@
-DofusAuto — version 0.8.2 (Phases 1 à 6 : combats en boucle)
+DofusAuto — version 0.8.4 (Phases 1 à 6 : combats en boucle)
 ===========================================================
 
 LANCER
@@ -61,6 +61,9 @@ RÉGLAGES
     « max_move_cells » dans config.json.
     « Tester : combat (sans clic) » montre la case visée (croix violette) quand
     personne n'est à portée.
+  - 2e sort : après les Coagulations (si toutes ont réussi), le programme lance
+    le Pied du Sacrieur (3 PA) sur un monstre au contact. Réglage « second_spell »
+    (true/false) dans config.json.
   - Autres réglages : fichier config.json (à ouvrir avec le Bloc-notes).
 
 AJOUTER UN MONSTRE

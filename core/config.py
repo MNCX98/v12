@@ -20,6 +20,7 @@ class Config:
     do_turns: bool = True                       # phases 4-5 : jouer les tours (sorts + fin du tour)
     casts_per_turn: int = 2                     # nombre de lancers de Coagulation par tour
     pause_between_casts_ms: int = 500           # pause supplémentaire entre deux lancers d'un même tour
+    second_spell: bool = True                   # après les Coagulations réussies : lancer le Pied du Sacrieur
     move_when_out_of_range: bool = True         # personne à portée : se rapprocher du monstre le plus proche
     max_move_cells: int = 3                     # nombre maximum de cases parcourues pour se rapprocher
     turn_wait_s: int = 120                      # attente maximale de mon tour
