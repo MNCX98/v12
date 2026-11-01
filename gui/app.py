@@ -23,7 +23,7 @@ from phases.p3_placement import RULES, test_placement
 from phases.p4_tour import test_combat
 from phases.runner import run_phases
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 
 # Modes pendant lesquels DofusAuto se réduit pour ne pas cacher le jeu, puis revient.
 HIDE_MODES = {"test", "testui", "testplace", "testcombat", "snapshot", "sequence"}

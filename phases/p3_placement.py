@@ -130,6 +130,7 @@ def run_placement(ctx: Context, should_stop, on_frame=None) -> bool:
     if moved:
         inp.click(ox + plan.chosen.cx, oy + plan.chosen.cy)
         ctx.log(f"Clic sur la case {plan.chosen.center}.")
+        ctx.me_hint = plan.chosen.center                  # ma position de départ pour le combat
         time.sleep(0.8)
     frame = draw_plan(scene, plan, clicked=moved)
     if on_frame:

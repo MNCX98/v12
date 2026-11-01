@@ -1,4 +1,4 @@
-DofusAuto — version 0.8.1 (Phases 1 à 6 : combats en boucle)
+DofusAuto — version 0.8.2 (Phases 1 à 6 : combats en boucle)
 ===========================================================
 
 LANCER

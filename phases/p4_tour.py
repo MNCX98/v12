@@ -10,7 +10,7 @@ from core import input as inp
 from core.combat import (find_enemies, find_me, range_fraction, range_mask, range_visible,
                          sort_by_distance)
 from core.combat import _game_roi
-from core.grid import grid_distance, move_candidates
+from core.grid import grid_distance, move_candidates, to_grid, to_screen
 from core.imgio import save_image
 from core.paths import logs_dir
 from core.vision import scan
@@ -99,40 +99,72 @@ def _deselect_spell(ctx: Context) -> bool:
     return False
 
 
-def plan_move(ctx: Context, scene, enemies, me):
+def plan_move(ctx: Context, scene, enemies, me_pos: tuple[int, int]):
     """Monstre visé et cases candidates (les meilleures d'abord) pour se rapprocher."""
-    target = sort_by_distance(enemies, me.center)[0]
+    target = sort_by_distance(enemies, me_pos)[0]
     h, w = scene.shape[:2]
     roi = _game_roi(h, w)
-    cands = [(k, p) for k, p in move_candidates(me.center, target.center, [e.center for e in enemies],
+    cands = [(k, p) for k, p in move_candidates(me_pos, target.center, [e.center for e in enemies],
                                                ctx.config.max_move_cells)
              if 0 <= p[0] < w and 0 <= p[1] < h and roi[p[1], p[0]]]
     return target, cands
 
 
+def _range_center(mask, enemies) -> tuple[int, int] | None:
+    """Position approximative de mon personnage : centre de la zone violette du sort (qui l'entoure),
+    recalé sur le centre d'une case (les adversaires servent de repère de grille)."""
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0 or not enemies:
+        return None
+    c = (int(xs.mean()), int(ys.mean()))
+    ref = enemies[0].center
+    return to_screen(to_grid(c, ref), ref)
+
+
+def my_position(ctx: Context, scene, me, mask, enemies):
+    """Ma position : anneau rouge si visible, sinon dernière position connue, sinon centre de la portée."""
+    if me:
+        return me.center
+    _diag(ctx, scene, enemies, None, label="perso_introuvable")
+    if ctx.me_hint:
+        ctx.log(f"Anneau rouge de mon personnage non vu : j'utilise sa dernière position connue {ctx.me_hint}.")
+        return ctx.me_hint
+    pos = _range_center(mask, enemies)
+    if pos:
+        ctx.log(f"Anneau rouge de mon personnage non vu : je l'estime au centre de la portée du sort, en {pos}.")
+    else:
+        ctx.log("⚠ Position de mon personnage inconnue.")
+    return pos
+
+
 def _wait_moved(ctx: Context, start: tuple[int, int], timeout: float = 4.0):
-    """Attend que mon personnage ait changé de case et soit immobile. Retourne sa position ou None."""
-    t0, last = time.time(), None
+    """Attend la fin du déplacement. Retourne ('moved', position), ('same', None) si le personnage est
+    toujours sur sa case, ou ('unknown', None) si l'anneau rouge n'est jamais visible."""
+    t0, last, seen_same = time.time(), None, False
     while time.time() - t0 < timeout:
         time.sleep(0.4)
         s, _ = ctx.capture.grab()
         me = find_me(s)
-        if not me or grid_distance(me.center, start) < 0.75:
-            last = None
+        if not me:
+            continue
+        if grid_distance(me.center, start) < 0.75:
+            seen_same, last = True, None
             continue
         if last and grid_distance(me.center, last) < 0.5:
-            return me.center
+            return "moved", me.center
         last = me.center
-    return last
+    if last:
+        return "moved", last
+    return ("same", None) if seen_same else ("unknown", None)
 
 
-def move_closer(ctx: Context, enemies, me, should_stop) -> bool:
+def move_closer(ctx: Context, enemies, me_pos: tuple[int, int], should_stop) -> bool:
     """Se rapproche du monstre le plus proche (double clic sur une case), au plus max_move_cells cases."""
     if not _deselect_spell(ctx):
         return False
     scene, (ox, oy) = ctx.capture.grab()
-    target, cands = plan_move(ctx, scene, enemies, me)
-    dist = grid_distance(target.center, me.center)
+    target, cands = plan_move(ctx, scene, enemies, me_pos)
+    dist = grid_distance(target.center, me_pos)
     if not cands:
         ctx.log(f"Monstre le plus proche à {dist:.0f} case(s) : déjà au contact ou aucune case possible.")
         return False
@@ -141,15 +173,19 @@ def move_closer(ctx: Context, enemies, me, should_stop) -> bool:
             return False
         ctx.log(f"Déplacement de {k} case(s) vers le monstre en {target.center} (à {dist:.0f} case(s)) : "
                 f"double clic en ({x}, {y}).")
-        _diag(ctx, scene, enemies, me, target, label="deplacement")
+        _diag(ctx, scene, enemies, None, target, label="deplacement")
         for i in range(2):
             inp.click(ox + x, oy + y)
             if i == 0:
                 time.sleep(ctx.config.click_interval_ms / 1000)
-        pos = _wait_moved(ctx, me.center)
-        if pos:
+        status, pos = _wait_moved(ctx, me_pos)
+        if status == "moved":
             ctx.me_hint = pos
             ctx.log(f"✔ Personnage déplacé en {pos}.")
+            return True
+        if status == "unknown":
+            ctx.me_hint = (x, y)                       # on suppose le déplacement fait, sans le refaire
+            ctx.log("Déplacement non vérifiable (anneau rouge non vu) : je considère qu'il est fait.")
             return True
         ctx.log("Le personnage n'a pas bougé (case inaccessible ?), j'essaie une autre case.")
     ctx.log("⚠ Déplacement impossible : je finis le tour.")
@@ -186,9 +222,10 @@ def play_turn(ctx: Context, should_stop) -> int:
                     if range_fraction(mask, f.center) >= cfg.range_min_fraction]
         ctx.log(f"{len(enemies)} adversaire(s), {len(in_range)} à portée.")
         if not in_range:
-            if cfg.move_when_out_of_range and me:
+            pos = my_position(ctx, scene, me, mask, enemies) if cfg.move_when_out_of_range else None
+            if pos:
                 ctx.log("Aucun adversaire à portée : je me rapproche.")
-                move_closer(ctx, enemies, me, should_stop)
+                move_closer(ctx, enemies, pos, should_stop)
             else:
                 ctx.log("Aucun adversaire à portée : je passe le tour.")
             break
@@ -284,7 +321,7 @@ def test_combat(ctx: Context) -> np.ndarray:
     move_to = None
     if me and enemies and visible and ctx.config.move_when_out_of_range and not any(
             range_fraction(mask, f.center) >= ctx.config.range_min_fraction for f in enemies):
-        target, cands = plan_move(ctx, scene, enemies, me)
+        target, cands = plan_move(ctx, scene, enemies, me.center)
         if cands:
             move_to = cands[0]
             ctx.log(f"Personne à portée : je me déplacerais de {move_to[0]} case(s) en {move_to[1]} "
