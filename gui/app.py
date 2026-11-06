@@ -24,7 +24,7 @@ from phases.p3_placement import RULES, test_placement
 from phases.p4_tour import test_combat
 from phases.runner import run_phases
 
-VERSION = "0.8.4"
+VERSION = "0.8.7"
 
 # Modes pendant lesquels DofusAuto se réduit pour ne pas cacher le jeu, puis revient.
 HIDE_MODES = {"test", "testui", "testplace", "testcombat", "snapshot", "sequence"}
@@ -154,6 +154,36 @@ class MainWindow(QMainWindow):
         self.chk_loop.setChecked(self.cfg.loop_combats)
         self.chk_loop.toggled.connect(lambda v: setattr(self.cfg, "loop_combats", bool(v)))
         grid.addWidget(self.chk_loop, 3, 0)
+        self.chk_open = QCheckBox("Sort d'ouverture (1er tour seulement)")
+        self.chk_open.setChecked(self.cfg.opening_spell)
+        self.chk_open.toggled.connect(lambda v: setattr(self.cfg, "opening_spell", bool(v)))
+        grid.addWidget(self.chk_open, 4, 0)
+        self.chk_heal = QCheckBox("Contrôler la vie avant chaque combat")
+        self.chk_heal.setChecked(self.cfg.heal_enabled)
+        self.chk_heal.toggled.connect(lambda v: setattr(self.cfg, "heal_enabled", bool(v)))
+        grid.addWidget(self.chk_heal, 5, 0)
+        heal_row = QHBoxLayout()
+        heal_row.addWidget(QLabel("Vie minimale :"))
+        self.min_hp = QSpinBox()
+        self.min_hp.setRange(1, 100)
+        self.min_hp.setSingleStep(5)
+        self.min_hp.setSuffix(" %")
+        self.min_hp.setValue(self.cfg.min_hp_percent)
+        self.min_hp.valueChanged.connect(lambda v: setattr(self.cfg, "min_hp_percent", int(v)))
+        heal_row.addWidget(self.min_hp)
+        heal_row.addStretch(1)
+        grid.addLayout(heal_row, 5, 1)
+        pause_row = QHBoxLayout()
+        pause_row.addWidget(QLabel("Pause entre les attaques :"))
+        self.pause = QSpinBox()
+        self.pause.setRange(0, 5000)
+        self.pause.setSingleStep(100)
+        self.pause.setSuffix(" ms")
+        self.pause.setValue(self.cfg.pause_between_casts_ms)
+        self.pause.valueChanged.connect(lambda v: setattr(self.cfg, "pause_between_casts_ms", int(v)))
+        pause_row.addWidget(self.pause)
+        pause_row.addStretch(1)
+        grid.addLayout(pause_row, 3, 1)
         grid.setColumnStretch(2, 1)
         lay.addWidget(steps, 1)
         tabs.addTab(tab_combat, "Combat")
@@ -232,6 +262,7 @@ class MainWindow(QMainWindow):
         self.btn_logs.clicked.connect(lambda: self._open(logs_dir()))
         self.btn_caps.clicked.connect(lambda: self._open(captures_dir()))
 
+        self.log(f"DofusAuto {VERSION} (copie sangliers uniquement : lecture de la portée du sort corrigée)")
         self._reload_templates()
         self._set_running(False)
         QTimer.singleShot(0, lambda: self.log("Prêt. Place BlueStacks bien visible (sans le recouvrir), "

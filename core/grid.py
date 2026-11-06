@@ -80,7 +80,7 @@ def to_screen(uv: tuple[int, int], ref: tuple[float, float]) -> tuple[int, int]:
 
 
 def move_candidates(me: tuple[int, int], target: tuple[int, int], occupied: list[tuple[int, int]],
-                    max_cells: int) -> list[tuple[int, tuple[int, int]]]:
+                    max_cells: int, shorter: bool = True, top: int = 2) -> list[tuple[int, tuple[int, int]]]:
     """Cases où aller pour se rapprocher de `target`, les meilleures d'abord.
 
     Retourne [(nombre de cases parcourues, (x, y) écran)]. On ne va jamais sur une case occupée
@@ -91,15 +91,19 @@ def move_candidates(me: tuple[int, int], target: tuple[int, int], occupied: list
     dist = abs(tu) + abs(tv)
     busy = {to_grid(o, me) for o in occupied}
     out = []
-    for k in range(min(max_cells, dist - 1), 0, -1):
+    start = min(max_cells, dist - 1)
+    stop = 0 if shorter else max(start - 1, 0)       # shorter=False : uniquement des déplacements de `start` cases
+    for k in range(start, stop, -1):
         cells = []
         for u in range(-k, k + 1):
             for v in {k - abs(u), -(k - abs(u))}:
                 if (u, v) in busy:
                     continue
                 left = abs(tu - u) + abs(tv - v)
+                if not shorter and left >= dist:         # case qui n'approche pas du monstre : inutile de l'essayer
+                    continue
                 straight = abs(u * tv - v * tu)          # écart à la ligne droite vers le monstre
                 cells.append((left, straight, (u, v)))
         cells.sort()
-        out.extend((k, to_screen(c[2], me)) for c in cells[:2])
+        out.extend((k, to_screen(c[2], me)) for c in cells[:top])
     return out

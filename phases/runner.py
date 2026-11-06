@@ -8,6 +8,7 @@ from phases.p2_combat import wait_for_combat
 from phases.p3_placement import run_placement
 from phases.p4_tour import run_turns
 from phases.p6_fin import close_result
+from phases.p_vie import ensure_health
 
 
 def _sleep(seconds: float, should_stop) -> None:
@@ -43,9 +44,16 @@ def run_phases(ctx: Context, should_stop, on_frame=None) -> None:
     cfg = ctx.config
     ctx.log("Démarré. Appuie sur F12 pour arrêter.")
     combats = 0
+    need_heal = True                                               # contrôle de la vie avant chaque combat
     while not should_stop():
         pause = cfg.scan_interval_ms / 1000
         try:
+            if need_heal and cfg.heal_enabled:
+                if ensure_health(ctx, should_stop) == "fail":
+                    if not should_stop():
+                        ctx.log("Le programme s'arrête : vie insuffisante, reprends la main.")
+                    return
+                need_heal = False
             out = scan_once(ctx, do_click=True)                    # phase 1
             if on_frame:
                 on_frame(out.frame)
@@ -57,6 +65,7 @@ def run_phases(ctx: Context, should_stop, on_frame=None) -> None:
                     if result == "done":
                         combats += 1
                         ctx.me_hint = None
+                        need_heal = True
                         ctx.log(f"✔ Combat n°{combats} terminé.")
                         if not cfg.loop_combats:
                             ctx.log("Arrêt après un combat (option « enchaîner les combats » décochée).")

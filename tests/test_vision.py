@@ -17,9 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.vision import load_templates, load_ui_templates, scan  # noqa: E402
 from phases.p2_combat import read_ui  # noqa: E402
 from phases.p3_placement import make_plan  # noqa: E402
-from core.combat import find_enemies, find_me, range_fraction, range_mask, range_visible  # noqa: E402
+from core.combat import find_enemies, find_me, range_fraction, range_mask, range_visible, spell_selected  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent / "assets" / "monsters"
+ROOT = Path(__file__).resolve().parent / "monsters_ref"        # images de référence des tests (bouftous)
+MONSTERS = Path(__file__).resolve().parent.parent / "assets" / "monsters"   # monstres réellement utilisés par cette copie
 THRESHOLD = 0.80
 
 
@@ -160,6 +161,57 @@ def main():
         ok = n == 2 + len(extra)
         print(f"[{'OK' if ok else 'ÉCHEC'}] groupe de {2 + len(extra)} monstres voisins : {n} détecté(s)")
         failures += not ok
+
+    # 3i) nouvelle carte (sol vert olive) : la portée du sort est d'un bleu un peu différent (teinte 118)
+    ic_by = {t.variant: t for t in ui}
+    d18, d19 = load("18_nouvelle_carte_debut_tour.png"), load("19_nouvelle_carte_sort_choisi.png")
+    i18 = scan(d18, [ic_by["sort_attaque"]], 0.85).detections
+    i19 = scan(d19, [ic_by["sort_attaque"]], 0.85).detections
+    ok = (bool(i18) and bool(i19) and not spell_selected(d18, i18[0].x, i18[0].y, i18[0].w, i18[0].h)
+          and spell_selected(d19, i19[0].x, i19[0].y, i19[0].w, i19[0].h)
+          and range_visible(d19) and not range_visible(d18))
+    print(f"[{'OK' if ok else 'ÉCHEC'}] nouvelle carte : sort sélectionné vu (cadre orange et zone bleue), absent hors sélection")
+    failures += not ok
+    e19, m19, mk19 = find_enemies(d19), find_me(d19), range_mask(d19)
+    inr = sorted(e.center for e in e19 if range_fraction(mk19, e.center) >= 0.05)
+    ok = (len(e19) == 3 and m19 is not None and abs(m19.cx - 1240) <= 8 and abs(m19.cy - 848) <= 8
+          and len(inr) == 2 and abs(inr[0][0] - 1198) <= 8 and abs(inr[1][0] - 1329) <= 8)
+    print(f"[{'OK' if ok else 'ÉCHEC'}] nouvelle carte : 3 adversaires, 2 à portée (le 3e est derrière un obstacle) : {inr}")
+    failures += not ok
+
+    # 3j) monstres de cette copie (sangliers) : chaque variante est retrouvée seule sur un décor, et rien sur un décor vide
+    mine = load_templates(MONSTERS)
+    ok_all = len(mine) >= 16
+    for t in mine:
+        scene = make_background(rng)
+        x, y = int(rng.integers(50, 1000)), int(rng.integers(50, 560))
+        paste(scene, t, x, y)
+        res = scan(scene, mine, THRESHOLD)
+        ok = bool(res.detections) and abs(res.detections[0].x - x) <= 2 and abs(res.detections[0].y - y) <= 2 \
+            and (res.detections[0].monster, res.detections[0].variant) == (t.monster, t.variant)
+        ok_all = ok_all and ok
+    empty = sum(len(scan(make_background(rng), mine, THRESHOLD).detections) for _ in range(3))
+    real = sum(len(scan(load(n), mine, THRESHOLD).detections)
+               for n in ("26_resultat_combat.png", "18_nouvelle_carte_debut_tour.png", "08c_creature_mon_tour.png"))
+    ok = ok_all and empty == 0 and real == 0
+    print(f"[{'OK' if ok else 'ÉCHEC'}] {len(mine)} images de sangliers : chaque variante retrouvée, "
+          f"{empty + real} fausse(s) détection(s) sur décors vides et captures réelles")
+    failures += not ok
+
+    # 3k) lecture de la vie : cœur à 97 % (fin de combat) et à 67 % (hors combat), repère « œil » du HUD
+    from core.vie import read_hp_percent
+    eye_t = cv2.imread(str(Path(__file__).resolve().parent.parent / "assets" / "ui" / "hud_oeil.png"))
+    got = []
+    for name, expected in (("26_resultat_combat.png", 97), ("27_hors_combat_vie_67.png", 67)):
+        if not (fx / name).exists():
+            continue                                    # capture absente du dépôt : test sauté
+        img = load(name)
+        res = cv2.matchTemplate(img, eye_t, cv2.TM_CCOEFF_NORMED)
+        _, score, _, loc = cv2.minMaxLoc(res)
+        pct = read_hp_percent(img, loc[0], loc[1]) if score > 0.85 else None
+        got.append((name[:2], round(pct) if pct is not None else None))
+        failures += not (pct is not None and abs(pct - expected) <= 3)
+    print(f"[{'OK' if all(g[1] is not None for g in got) else 'ÉCHEC'}] lecture de la vie sur le cœur : {got} (attendu 97 et 67)")
 
     # 4) vitesse
     t0 = time.time()
